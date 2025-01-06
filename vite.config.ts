@@ -3,6 +3,7 @@ import { type ViteDevServer, defineConfig } from 'vite';
 
 import { Server } from 'socket.io';
 
+// development websocket server
 const webSocketServer = {
 	name: 'webSocketServer',
 	configureServer(server : ViteDevServer ) {
@@ -13,21 +14,21 @@ const webSocketServer = {
 		io.on('connection', (socket) => {
 			socket.emit('eventFromServer', 'Hello, World 👋')
 
-			socket.on('joinRoom', (room) => {
-				console.log(`${socket.id} joined room: ${room}`);
-				socket.join(room);
+			socket.on('joinRoom', (roomId) => {
+				console.log(`${socket.id} joined room: ${roomId}`);
+				socket.join(roomId);
 			})
 
-			socket.on('leaveRoom', (room) => {
-				console.log(`${socket.id} left room: ${room}`);
-				socket.leave(room);
-
-				io.to(room).emit('eventFromServer', `${socket.id} left room: ${room}`);
+			socket.on('leaveRoom', (roomId) => {
+				console.log(`${socket.id} left room: ${roomId}`);
+				io.to(roomId).emit('eventFromServer', `${socket.id} left room: ${roomId}`);
+				socket.leave(roomId);
 			})
 
-			socket.on('message', (message) => {
+			socket.on('message', ({ roomId, message }) => {
 				console.log(`Message from ${socket.id}: ${message}`);
-				io.emit('eventFromServer', message);
+				console.log(io.sockets.adapter.rooms);
+				io.to(roomId).emit('eventFromServer', message);
 			})
 
 		})
