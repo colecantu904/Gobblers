@@ -18,7 +18,15 @@
   const socket = io()
 
   let roomId = ''
-  let message = ''
+
+  let chats : string[] = [ "Welcome to gobblers!" ];
+
+  let currentMove : any = {
+    color : '',
+    size : '',
+    row : '',
+    col : ''
+  }
 
   let gameState = [
     [[], [], []],
@@ -27,7 +35,8 @@
   ]
 
   socket.on('eventFromServer', ( message ) => {
-    console.log(message)
+    chats = [...chats, message]
+    console.log(chats)
   })
 
   socket.on('gameState', (newGameState) => {
@@ -37,15 +46,28 @@
 
 </script>
 
-<!-- Simple messaging system -->
-<form on:submit|preventDefault={() => socket.emit('joinRoom', roomId)}>
+<!-- Room join system -->
+<form on:submit|preventDefault={() => socket.emit('joinRoom', { roomId, gameState })}>
   <input type="text" placeholder="Enter your room code" bind:value={roomId} required />
   <button type="submit">Join room</button>
   <button type="button" on:click={() => socket.emit('leaveRoom', roomId )}>Leave room</button>
 </form>
 
-<form on:submit|preventDefault={() => socket.emit('message', { roomId, message })}>
-  <input type="text" placeholder="Enter your message" bind:value={message} required />
-  <button type="submit">Send message to server</button>
+<!-- Game board / move maker -->
+<form on:submit|preventDefault={() => socket.emit('makeMove', { roomId, currentMove })}>
+  <input type="text" placeholder="Enter your piece color" bind:value={currentMove['color']} required />
+  <!-- Size will now be a value between 0-2 -->
+  <input type="text" placeholder="Enter your size 0-2" bind:value={currentMove['size']} required />
+  <input type="text" placeholder="Enter your piece row" bind:value={currentMove['row']} required />
+  <input type="text" placeholder="Enter your piece col" bind:value={currentMove['col']} required />
+  <button type="submit">Submit move</button>
 </form>
 
+<!-- Game board underdevelopment -->
+
+
+<!-- Chat -->
+<h3>Chat</h3>
+{#each chats as message}
+  <p>{message}</p>
+{/each}
