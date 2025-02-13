@@ -57,10 +57,10 @@ export function possibleMoves(gameState : state) : any {
     return moves;
 }
 
-function getPossiblePieces( gameState : state ) : any {
+export function getPossiblePieces( gameState : state ) : any {
     let pieces : Record<string, Array<number>> = {
-        "r" : [2, 2, 2],
-        "b" : [2, 2, 2]
+        "red" : [2, 2, 2],
+        "blue" : [2, 2, 2]
 
     }
 
@@ -83,6 +83,8 @@ export function isValidMove(gameState : state , move : any ) : any {
     // needs to be fixed somehow
     // needs to be changes for js, or implemented entirely differently
     // yea this is stupid but it works
+    // just checks if the move object is in the moves list
+    console.log(moves.some(thing => thing.color === move.color && thing.size === move.size && thing.row === move.row && thing.col === move.col ));
     return moves.some(thing => thing.color === move.color && thing.size === move.size && thing.row === move.row && thing.col === move.col );
 }
 
@@ -131,7 +133,7 @@ function getTurn(gameState : state) : any {
     for ( const col of gameState ) {
         for ( const row of col ) {
             for ( const cell of row ) {
-                if ( cell[0] == "r" ) {''
+                if ( cell[0] == "red" ) {''
                     red += 1;
                 } else {
                     blue += 1;
@@ -141,8 +143,8 @@ function getTurn(gameState : state) : any {
     }
     // if blue has more pieces on the board, then its red's turn
     if ( blue > red ) {
-        return "r";
+        return "red";
     } else {
-        return "b";
+        return "blue";
     }
 }
