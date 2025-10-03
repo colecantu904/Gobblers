@@ -17,68 +17,99 @@
   // room id not emmitting properly, moves made after game over, string indexed sizes, piece containers, room id standard, room size limits
   // make sure you are good to push to prod!
 
-  import { io } from 'socket.io-client'
-  import { writable } from 'svelte/store';
+  import { io } from "socket.io-client";
+  import { writable } from "svelte/store";
   import { getPossiblePieces } from "$lib/gameLogic";
 
-  const socket = io()
+  const socket = io();
 
   // they are strings right now because ts is retarded
   const sizes = {
-    "2" : "10vw",
-    "1" : "7.5vw",
-    "0" : "6vw",
-  }
+    "2": "10vw",
+    "1": "7.5vw",
+    "0": "6vw",
+  };
 
   let currentPieces = [];
 
-  let roomId = ''
+  let roomId = "";
 
-  let chats : string[] = [ "Welcome to gobblers!" ];
+  let chats: string[] = ["Welcome to gobblers!"];
 
-  let currentMove : any = {
-    color : '',
-    size : '',
-    row : '',
-    col : ''
-  }
+  let currentMove: any = {
+    color: "",
+    size: "",
+    row: "",
+    col: "",
+  };
 
   let gameState = [
     [[], [], []],
     [[], [], []],
-    [[], [], []]
-  ]
+    [[], [], []],
+  ];
 
-  socket.on('eventFromServer', ( message ) => {
-    chats = [...chats, message]
-    console.log(chats)
-  })
+  socket.on("eventFromServer", (message) => {
+    chats = [...chats, message];
+    console.log(chats);
+  });
 
-  socket.on('gameState', (newGameState) => {
-    console.log(newGameState)
-    gameState = [...newGameState]
-  })
-
+  socket.on("gameState", (newGameState) => {
+    console.log(newGameState);
+    gameState = [...newGameState];
+  });
 </script>
 
-<!-- lets just stick wiht making a working room joining system -->
-
+<!-- lets just stick wiht making a working room joining system and stuff -->
 
 <!-- Room join system -->
-<form on:submit|preventDefault={() => socket.emit('joinRoom', { roomId, gameState })}>
-  <input type="text" placeholder="Enter your room code" bind:value={roomId} required />
+<form
+  on:submit|preventDefault={() =>
+    socket.emit("joinRoom", { roomId, gameState })}
+>
+  <input
+    type="text"
+    placeholder="Enter your room code"
+    bind:value={roomId}
+    required
+  />
   <button type="submit">Join room</button>
-  <button type="button" on:click={() => socket.emit('leaveRoom', roomId )}>Leave room</button>
+  <button type="button" on:click={() => socket.emit("leaveRoom", roomId)}
+    >Leave room</button
+  >
 </form>
 
 <!-- Game board / move maker -->
- <!--right now the sizes are sent as strings to the websocket, need to change that -->
-<form on:submit|preventDefault={() => socket.emit('makeMove', { roomId, currentMove })}>
-  <input type="text" placeholder="Enter your piece color" bind:value={currentMove['color']} required />
+<!--right now the sizes are sent as strings to the websocket, need to change that -->
+<form
+  on:submit|preventDefault={() =>
+    socket.emit("makeMove", { roomId, currentMove })}
+>
+  <input
+    type="text"
+    placeholder="Enter your piece color"
+    bind:value={currentMove["color"]}
+    required
+  />
   <!-- Size will now be a value between 0-2 -->
-  <input type="text" placeholder="Enter your size 0-2" bind:value={currentMove['size']} required />
-  <input type="text" placeholder="Enter your piece row" bind:value={currentMove['row']} required />
-  <input type="text" placeholder="Enter your piece col" bind:value={currentMove['col']} required />
+  <input
+    type="text"
+    placeholder="Enter your size 0-2"
+    bind:value={currentMove["size"]}
+    required
+  />
+  <input
+    type="text"
+    placeholder="Enter your piece row"
+    bind:value={currentMove["row"]}
+    required
+  />
+  <input
+    type="text"
+    placeholder="Enter your piece col"
+    bind:value={currentMove["col"]}
+    required
+  />
   <button type="submit">Submit move</button>
 </form>
 
@@ -89,26 +120,47 @@
 
 <!-- opponents pieces on the left of the board and players on the right -->
 {#if getPossiblePieces(gameState)}
-  {currentPieces = getPossiblePieces(gameState)}
-  <p>blue -> l: {currentPieces["blue"][2]} m: {currentPieces["blue"][1]} s: {currentPieces["blue"][0]}</p>
-  <p>red -> l: {currentPieces["red"][2]} m: {currentPieces["red"][1]} s: {currentPieces["red"][0]}</p>
+  {(currentPieces = getPossiblePieces(gameState))}
+  <p>
+    blue -> l: {currentPieces[0][2]} m: {currentPieces[0][1]} s: {currentPieces[
+      0
+    ][0]}
+  </p>
+  <p>
+    red -> l: {currentPieces[1][2]} m: {currentPieces[1][1]} s: {currentPieces[
+      1
+    ][0]}
+  </p>
 {/if}
 
 <div class="board">
   {#each gameState as row, rowIndex}
     {#each row as cell, cellIndex}
-    <!-- Make a svelte div object that takes a color and size -->
+      <!-- Make a svelte div object that takes a color and size -->
       <div class="cell">
-        {#if cell.length > 0 }
+        {#if cell.length > 0}
           {console.log(cell[0][0], sizes[cell[0][1]])}
-          <div class="piece" style="background-color: {cell[0][0]}; height: {sizes[cell[0][1]]}; width: {sizes[cell[0][1]]};">
-          </div>
+          {#if cell[0][0] == 0}
+            <div
+            class="piece"
+            style="background-color: blue; height: {sizes[
+              cell[0][1]
+            ]}; width: {sizes[cell[0][1]]};"
+          ></div>
+          {:else}
+            <div
+            class="piece"
+            style="background-color: red; height: {sizes[
+              cell[0][1]
+            ]}; width: {sizes[cell[0][1]]};"
+          ></div>
+          {/if}
+          
         {/if}
       </div>
     {/each}
   {/each}
 </div>
-
 
 <!-- Chat -->
 <h3>Chat</h3>
@@ -133,11 +185,10 @@
     justify-content: center;
     font-size: 2em;
     cursor: pointer;
-    background-color: #f8f8f8
+    background-color: #f8f8f8;
   }
-  
-  .piece {
 
+  .piece {
     background: lightblue;
     text-align: center;
     line-height: 50px;
