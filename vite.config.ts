@@ -3,7 +3,7 @@ import { type ViteDevServer, defineConfig } from "vite";
 
 import { Server } from "socket.io";
 
-import { isValidMove, getWinner, isGameOver } from "./src/lib/gameLogic.js";
+import { isValidMove, getWinner, isGameOver } from "./src/lib/gameLogic";
 
 import type { state } from "./src/lib/gameLogic.js";
 
