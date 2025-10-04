@@ -1,0 +1,24 @@
+# docker-compose.override.yml
+# This file is automatically loaded by docker-compose for development overrides
+
+version: "3.8"
+
+services:
+  gobble-app:
+    # Mount source code for development (optional)
+    # volumes:
+    #   - ./src:/app/src
+    #   - ./static:/app/static
+    environment:
+      - NODE_ENV=development
+      - DEBUG=socket.io*
+    # Expose port for direct access during debugging
+    ports:
+      - "3000:3000"
+
+  caddy:
+    # Enable Caddy admin API for debugging
+    ports:
+      - "2019:2019" # Caddy admin API
+    # Enable debug logging
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch

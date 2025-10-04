@@ -23,8 +23,8 @@
 
   // Configure Socket.IO client for HTTPS/WSS when behind Caddy proxy
   const socket = io({
-    // In production with Caddy, this will automatically use WSS (secure WebSockets)
-    // since the connection will be made over HTTPS
+    // For local testing with Caddy on port 8443, connect directly to the proxy
+    // In production, this will automatically use WSS when served over HTTPS
     transports: ["websocket", "polling"],
     upgrade: true,
     rememberUpgrade: true,

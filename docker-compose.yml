@@ -5,6 +5,11 @@ services:
     # build using the DockerFile in the the current directory
     build: .
     restart: unless-stopped
+    # Expose port 3000 internally to Docker network
+    expose:
+      - "3000"
+    networks:
+      - app-network
 
   caddy:
     image: caddy:latest
@@ -12,11 +17,22 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      - "8443:8443" # For local testing
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
+    enviroments:
+      - SERVER_IP=${SERVER_IP}
+    networks:
+      - app-network
+    depends_on:
+      - gobble-app
 
 volumes:
-  caddy-data:
-  caddy-config:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app-network:
+    driver: bridge

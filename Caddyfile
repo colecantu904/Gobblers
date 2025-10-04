@@ -1,60 +1,27 @@
-# Caddyfile for Gobblers WebSocket Server
-# Replace yourdomain.com with your actual domain name
+# Docker Compose configuration for Gobblers WebSocket Server
 
-yourdomain.com {
-    # Enable automatic HTTPS/SSL
-    tls {
-        # For development, you can use internal CA:
-        # tls internal
-        # For production, Caddy will automatically get Let's Encrypt certificates
-    }
-    
-    # Reverse proxy to your Node.js/Express server
+# Local testing with Docker Compose - uses port 8443 for HTTPS
+# localhost:8443 {
+#     tls internal
+#     reverse_proxy gobble-app:3000 {
+#         # WebSocket headers for Socket.IO support
+#         header_up Connection {>Connection}
+#         header_up Upgrade {>Upgrade}
+#     }
+# }
+
+{$SERVER_IP} {
+    tls internal
     reverse_proxy gobble-app:3000 {
-        # Essential headers for WebSocket support
-        header_up Host {upstream_hostport}
-        header_up X-Real-IP {remote_host}
-        header_up X-Forwarded-For {remote_host}
-        header_up X-Forwarded-Proto {scheme}
-        header_up X-Forwarded-Host {host}
-        
-        # WebSocket upgrade headers
+        # WebSocket headers for Socket.IO support
         header_up Connection {>Connection}
         header_up Upgrade {>Upgrade}
     }
-    
-    # Optional: Add security headers
-    header {
-        # HSTS
-        Strict-Transport-Security max-age=31536000;
-        # Prevent clickjacking
-        X-Frame-Options DENY
-        # Prevent MIME sniffing
-        X-Content-Type-Options nosniff
-        # XSS protection
-        X-XSS-Protection "1; mode=block"
-    }
-    
-    # Optional: Enable compression
-    encode gzip
-    
-    # Logging (optional, useful for debugging)
-    log {
-        output file /var/log/caddy/gobblers.log
-        format single_field common_log
-    }
 }
 
-# Alternative configuration for localhost development with custom port
-# Uncomment if you want to test locally with SSL on a different port
-# localhost:8443 {
-#     tls internal
-#     reverse_proxy localhost:3000 {
-#         header_up Host {upstream_hostport}
-#         header_up X-Real-IP {remote_host}
-#         header_up X-Forwarded-For {remote_host}
-#         header_up X-Forwarded-Proto {scheme}
-#         header_up X-Forwarded-Host {host}
+# Production configuration (uncomment and modify for your domain)
+# yourdomain.com {
+#     reverse_proxy gobble-app:3000 {
 #         header_up Connection {>Connection}
 #         header_up Upgrade {>Upgrade}
 #     }
