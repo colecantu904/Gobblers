@@ -34,6 +34,8 @@
 
   let roomId = "";
 
+  let playerColor = "";
+
   let chats: string[] = ["Welcome to gobblers!"];
 
   let currentMove: any = {
@@ -58,14 +60,22 @@
     console.log(newGameState);
     gameState = [...newGameState];
   });
+
+  socket.on("joinedRoom", (color) => {
+    playerColor = color;
+    console.log(`You are player ${playerColor}`);
+  })
+
 </script>
 
+<div id="main-container">
 <!-- lets just stick wiht making a working room joining system and stuff -->
 
 <!-- Room join system -->
 <form
-  on:submit|preventDefault={() =>
-    socket.emit("joinRoom", { roomId, gameState })}
+  on:submit|preventDefault={() => 
+  socket.emit("joinRoom", { roomId, gameState })
+  }
 >
   <input
     type="text"
@@ -133,6 +143,7 @@
   </p>
 {/if}
 
+<div id="board-container">
 <div class="board">
   {#each gameState as row, rowIndex}
     {#each row as cell, cellIndex}
@@ -162,18 +173,63 @@
   {/each}
 </div>
 
+<!-- players pieces on the right of the board -->
+ <div class="pieces-container"> 
+    <h3>Your pieces</h3>
+    {#if playerColor == '0'}
+      <div class="piece" style="background-color: blue; height: 10vw; width: 10vw;"></div>
+      <div class="piece" style="background-color: blue; height: 7.5vw; width: 7.5vw;"></div>
+      <div class="piece" style="background-color: blue; height: 6vw; width: 6vw;"></div>
+    {:else if playerColor == '1'}
+      <div class="piece" style="background-color: red; height: 10vw; width: 10vw;"></div>
+      <div class="piece" style="background-color: red; height: 7.5vw; width: 7.5vw;"></div>
+      <div class="piece" style="background-color: red; height: 6vw; width: 6vw;"></div>
+    {/if}
+ </div>
+
+</div>
+
 <!-- Chat -->
 <h3>Chat</h3>
 {#each chats as message}
   <p>{message}</p>
 {/each}
 
+</div>
+
 <style>
+  #main-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #3a3740;
+    color: white;
+    font-family: Arial, sans-serif;
+  }
+
+  #board-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pieces-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-left: 20px;
+  }
+
   .board {
     display: grid;
     grid-template-rows: repeat(3, 100px);
     grid-template-columns: repeat(3, 100px);
     gap: 5px;
+    background-color: #2c2a33;
   }
 
   .cell {

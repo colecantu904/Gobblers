@@ -187,6 +187,8 @@ io.on("connection", (socket) => {
     console.log(`${socket.id} joined room: ${roomId}`);
     console.log("currentGameState:", gameState);
 
+    let playerColor;
+
     // better handling for joining rooms multiple times
     // checking if socket id is already in players for that room
     if (!rooms[roomId]) {
@@ -196,8 +198,10 @@ io.on("connection", (socket) => {
       };
 
       rooms[roomId].players[socket.id] = { score: 0, color: 0 };
+      playerColor = 0;
     } else {
       rooms[roomId].players[socket.id] = { score: 0, color: 1 };
+      playerColor = 1;
     }
     // update gamestate for newly connected players
 
@@ -207,6 +211,9 @@ io.on("connection", (socket) => {
       "eventFromServer",
       `${socket.id} joined room: ${roomId}`
     );
+
+    // Send the player's color to the specific socket that joined
+    socket.emit("joinedRoom", playerColor);
 
     socket.join(roomId);
   });

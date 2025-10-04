@@ -1,15 +1,18 @@
 # -- Build -- #
-FROM node:18-alpine AS build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
 # Copy package files first for better caching
 COPY package*.json ./
 
-RUN npm install
+# Install all dependencies (including devDependencies for build)
+RUN npm ci
 
+# Copy source code
 COPY . .
 
+# Build the SvelteKit app
 RUN npm run build
 
 # -- Production -- #
@@ -21,13 +24,21 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 
-# Copy built app from build stage
+# Copy the built SvelteKit app from build stage
 COPY --from=build /app/build ./build
 
-# Copy server files
-COPY server ./server
+# Copy the custom server
+COPY --from=build /app/server ./server
+
+# Create a non-root user for security
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+
+# Change ownership of the app directory
+RUN chown -R nodejs:nodejs /app
+USER nodejs
 
 EXPOSE 3000
 
-# Start the Node.js server (not nginx)
+# Start the custom Node.js server
 CMD ["node", "server/index.js"]
