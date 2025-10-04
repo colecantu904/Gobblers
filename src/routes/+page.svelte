@@ -21,39 +21,47 @@
   import { get, writable } from "svelte/store";
   import { getPossiblePieces } from "$lib/gameLogic";
 
-  const socket = io();
+  // Configure Socket.IO client for HTTPS/WSS when behind Caddy proxy
+  const socket = io({
+    // In production with Caddy, this will automatically use WSS (secure WebSockets)
+    // since the connection will be made over HTTPS
+    transports: ["websocket", "polling"],
+    upgrade: true,
+    rememberUpgrade: true,
+  });
 
   // they are strings right now because ts is retarded
-  const sizes = {
-    "2": "20px",
-    "1": "7.5px",
-    "0": "6px",
-  };
+  const sizes = ["40px", "70px", "100px"];
 
-  let currentPieces = [];
-
-  let currentPiece: { color: string; size: string } | null = null;
+  let currentPiece: { color: number; size: number } | null = null;
 
   let roomId = "";
 
-  let playerColor = "";
+  let playerColor = -1;
 
+  let currentPieces = [];
   $: currentPieces = getPossiblePieces(gameState);
 
   let chats: string[] = ["Welcome to gobblers!"];
 
-  let currentMove: any = {
-    color: "",
-    size: "",
-    row: "",
-    col: "",
+  let currentMove: Record<string, number> = {
+    color: -1,
+    size: -1,
+    row: -1,
+    col: -1,
   };
 
-  let gameState = [
+  // Define the type for a piece
+  type Piece = { color: number; size: number };
+
+  // Define the type for the game state
+  let gameState: Piece[][][] = [
     [[], [], []],
     [[], [], []],
     [[], [], []],
   ];
+
+  $: gameState = gameState;
 
   socket.on("eventFromServer", (message) => {
     chats = [...chats, message];
@@ -65,163 +73,169 @@
     gameState = [...newGameState];
   });
 
-  socket.on("joinedRoom", (color, newGameState) => {
-    playerColor = color;
-    console.log(`You are player ${playerColor}`);
-  })
+  socket.on("joinedRoom", (newRoomCode, color) => {
+    console.log("joined room", newRoomCode, color);
+    if (!newRoomCode) {
+      console.error("No room code received from server");
+      return;
+    }
 
+    roomCode = newRoomCode;
+
+    playerColor = color;
+    console.log(color);
+
+    console.log(`You are player ${playerColor}`);
+  });
+
+  socket.on("leftRoom", () => {
+    roomCode = generateRoomCode(5);
+    socket.emit("joinRoom", { roomCode, roomId: roomCode });
+  });
+
+  function generateRoomCode(length: number) {
+    let result = "";
+    let characters =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+
+    return result;
+  }
+
+  // generate a room code
+  let roomCode = generateRoomCode(5);
+  // join the room
+  socket.emit("joinRoom", { roomCode, roomId: roomCode });
 </script>
 
-
-
 <div id="main-container">
-<!-- lets just stick wiht making a working room joining system and stuff -->
+  <!-- lets just stick wiht making a working room joining system and stuff -->
 
-<!-- Room join system -->
-<form
-  on:submit|preventDefault={() => 
-  socket.emit("joinRoom", { roomId, gameState })
-  }
->
-  <input
-    type="text"
-    placeholder="Enter your room code"
-    bind:value={roomId}
-    required
-  />
-  <button type="submit">Join room</button>
-  <button type="button" on:click={() => socket.emit("leaveRoom", roomId)}
-    >Leave room</button
+  <!-- Room join system -->
+  <h2 style="padding: 1rem;">{roomCode}</h2>
+  <form
+    on:submit|preventDefault={() =>
+      socket.emit("joinRoom", { roomId, roomCode })}
   >
-</form>
+    <input
+      type="text"
+      placeholder="Enter your room code"
+      bind:value={roomId}
+      required
+    />
+    <button type="submit">Join room</button>
+    <button type="button" on:click={() => socket.emit("leaveRoom", roomCode)}
+      >Leave room</button
+    >
+    <button type="button" on:click={() => socket.emit("resetGame", roomCode)}
+      >Reset Game</button
+    >
+  </form>
 
-<!-- Game board / move maker -->
-<!--right now the sizes are sent as strings to the websocket, need to change that -->
-<form
-  on:submit|preventDefault={() =>
-    socket.emit("makeMove", { roomId, currentMove })}
->
-  <input
-    type="text"
-    placeholder="Enter your piece color"
-    bind:value={currentMove["color"]}
-    required
-  />
-  <!-- Size will now be a value between 0-2 -->
-  <input
-    type="text"
-    placeholder="Enter your size 0-2"
-    bind:value={currentMove["size"]}
-    required
-  />
-  <input
-    type="text"
-    placeholder="Enter your piece row"
-    bind:value={currentMove["row"]}
-    required
-  />
-  <input
-    type="text"
-    placeholder="Enter your piece col"
-    bind:value={currentMove["col"]}
-    required
-  />
-  <button type="submit">Submit move</button>
-</form>
+  <!-- Game board -->
+  <div id="board-container">
+    <div class="board">
+      {#each gameState as row, rowIndex}
+        {#each row as cell, cellIndex}
+          <button
+            type="button"
+            class="cell"
+            aria-label="Cell {rowIndex}, {cellIndex}"
+            on:click={() => {
+              if (currentPiece && roomCode) {
+                currentMove = {
+                  color: currentPiece.color,
+                  size: currentPiece.size,
+                  row: rowIndex,
+                  col: cellIndex,
+                };
+                socket.emit("makeMove", { roomCode, currentMove });
+                console.log(currentMove);
+                currentPiece = null;
+              }
+            }}
+            on:keydown={(e) => {
+              if (
+                (e.key === "Enter" || e.key === " ") &&
+                currentPiece &&
+                roomCode
+              ) {
+                currentMove = {
+                  color: currentPiece.color,
+                  size: currentPiece.size,
+                  row: rowIndex,
+                  col: cellIndex,
+                };
+                socket.emit("makeMove", { roomCode, currentMove });
+                currentPiece = null;
+              }
+            }}
+          >
+            {#if cell.length > 0}
+              {console.log(cell[0].size, sizes[cell[0].size])}
+              {#if cell[0].color == 0}
+                <div
+                  class="piece"
+                  style="background-color: blue; height: {sizes[
+                    cell[0].size
+                  ]}; width: {sizes[cell[0].size]};"
+                ></div>
+              {:else}
+                <div
+                  class="piece"
+                  style="background-color: red; height: {sizes[
+                    cell[0].size
+                  ]}; width: {sizes[cell[0].size]};"
+                ></div>
+              {/if}
+            {/if}
+          </button>
+        {/each}
+      {/each}
+    </div>
 
-<!-- Game board underdevelopment -->
-<!-- not going to make it drag and drop, but rather click on the piece you want, then click on the space to put it -->
-<!-- The atcual board will just alawys reflect the game state, all logic is handled server side -->
-<!--even the piece containers will be rendered off of the board -->
-
-<!-- opponents pieces on the left of the board and players on the right -->
-
-
-<div id="board-container">
-<div class="board">
-  {#each gameState as row, rowIndex}
-    {#each row as cell, cellIndex}
-      <button
-        type="button"
-        class="cell"
-        aria-label="Cell {rowIndex}, {cellIndex}"
-        on:click={() => {
-          if (currentPiece && roomId) {
-            currentMove = {
-              color: `${currentPiece.color}`,
-              size: currentPiece.size,
-              row: `${rowIndex}`,
-              col: `${cellIndex}`
-            };
-            socket.emit("makeMove", { roomId, currentMove });
-            console.log(currentMove);
-            currentPiece = null;
-          }
-        }}
-        on:keydown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && currentPiece && roomId) {
-            currentMove = {
-              color: currentPiece.color,
-              size: currentPiece.size,
-              row: rowIndex,
-              col: cellIndex
-            };
-            socket.emit("makeMove", { roomId, currentMove });
-            currentPiece = null;
-          }
-        }}
-      >
-        {#if cell.length > 0}
-          {console.log(cell[0][0], sizes[cell[0][1]])}
-          {#if cell[0][0] == 0}
+    <!-- players pieces on the right of the board -->
+    <div class="pieces-container">
+      <h3>Your pieces</h3>
+      {#each currentPieces[Number(playerColor)] as piece, index}
+        {#if piece > 0}
+          <button
+            type="button"
+            class="piece-selector"
+            aria-label="Select piece"
+            on:click={() => {
+              currentPiece = { color: playerColor, size: index };
+              console.log(currentPiece);
+            }}
+          >
             <div
               class="piece"
-              style="background-color: blue; height: {sizes[
-                cell[0][1]
-              ]}; width: {sizes[cell[0][1]]};"
+              style="background-color: {playerColor == 0
+                ? 'blue'
+                : 'red'}; height: {index == 2
+                ? '120px'
+                : index == 1
+                  ? '80px'
+                  : '50px'}; width: {index == 2
+                ? '120px'
+                : index == 1
+                  ? '80px'
+                  : '50px'};"
             ></div>
-          {:else}
-            <div
-              class="piece"
-              style="background-color: red; height: {sizes[
-                cell[0][1]
-              ]}; width: {sizes[cell[0][1]]};"
-            ></div>
-          {/if}
+          </button>
         {/if}
-      </button>
-    {/each}
+      {/each}
+    </div>
+  </div>
+
+  <!-- Chat -->
+  <h3>Chat</h3>
+  {#each chats as message}
+    <p>{message}</p>
   {/each}
-</div>
-
-<!-- players pieces on the right of the board -->
- <div class="pieces-container"> 
-    <h3>Your pieces</h3>
-    {#each currentPieces[Number(playerColor)] as piece, index}
-      {#if piece > 0 }
-      <button
-        type="button"
-        class="piece-selector"
-        aria-label="Select piece"
-        on:click={() => {
-          currentPiece = { color: playerColor, size: `${index}` };
-          console.log(currentPiece);
-        }}
-      >
-        <div class="piece" style="background-color: {playerColor == '0' ? 'blue' : 'red'}; height: {index == 2 ? '10vw' : index == 1 ? '7.5vw' : '6vw'}; width: {index == 2 ? '10vw' : index == 1 ? '7.5vw' : '6vw'};"></div>
-      </button>
-      {/if}
-    {/each}
- </div>
-
-</div>
-
-<!-- Chat -->
-<h3>Chat</h3>
-{#each chats as message}
-  <p>{message}</p>
-{/each}
-
 </div>
 
 <style>
@@ -236,13 +250,11 @@
     gap: 20px;
   }
 
-  @media (min-width: 500px) {
-    #board-container {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      justify-content: center;
-    }
+  #board-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
   }
 
   @media (max-width: 500px) {
@@ -250,7 +262,6 @@
       flex-direction: column;
     }
   }
-  
 
   .pieces-container {
     display: flex;
@@ -274,27 +285,36 @@
 
   .board {
     display: grid;
-    grid-template-rows: repeat(3, 100px);
-    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 150px);
+    grid-template-columns: repeat(3, 150px);
     gap: 5px;
     background-color: #2c2a33;
   }
 
   .cell {
-    width: 100px;
-    height: 100px;
+    width: 150px;
+    height: 150px;
     border: 2px solid black;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2em;
     cursor: pointer;
     background-color: #f8f8f8;
   }
 
+  @media (max-width: 500px) {
+    .board {
+      grid-template-rows: repeat(3, 100px);
+      grid-template-columns: repeat(3, 100px);
+    }
+
+    .cell {
+      width: 100px;
+      height: 100px;
+    }
+  }
+
   .piece {
-    background: lightblue;
-    text-align: center;
     line-height: 50px;
     font-weight: bold;
     border-radius: 50%;

@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+
+# Build output
+build/
+dist/
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Misc
+.env
+.DS_Store
+*.swo
+*.swp
+*.zip
+*.tar.gz
+*.rar
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

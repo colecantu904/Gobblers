@@ -11,7 +11,7 @@ import { get } from "svelte/store";
 // basically works
 type roomsType = {
   [key: string]: {
-    players: Record<string, Record<string, string | number>>;
+    players: Record<string, Record<string, number | string>>;
     gameState: state;
   };
 };
@@ -27,107 +27,134 @@ const webSocketServer = {
     const io = new Server(server.httpServer);
 
     io.on("connection", (socket) => {
+      // log connection
       socket.emit("eventFromServer", "Hello, World 👋");
       console.log("player connected:", socket.id);
 
-      socket.on("joinRoom", ({ roomId, gameState }) => {
+      socket.on("joinRoom", ({ roomId, currentRoom }) => {
         let playerColor;
 
         // better handling for joining rooms multiple times
         // checking if socket id is already in players for that room
 
-        if (!rooms[roomId]) {
+        // Get the number of players in the room using Object.keys
+        const numPlayers = rooms[roomId]
+          ? Object.keys(rooms[roomId].players).length
+          : 0;
+
+        if (rooms[roomId] && numPlayers < 2 && currentRoom != roomId) {
+          // leave current Room
+          socket.leave(currentRoom);
+
+          // join the room
+          socket.join(roomId);
+
+          // assign player color
+          rooms[roomId].players[socket.id] = { color: 1, score: 0 };
+
+          socket.emit("gameState", rooms[roomId].gameState);
+
+          console.log(roomId);
+
+          socket.emit("joinedRoom", roomId, 1);
+        } else if (!rooms[roomId]) {
+          // create the room
+          socket.join(roomId);
+
           rooms[roomId] = {
-            players: {},
-            gameState: gameState,
+            players: { [socket.id]: { color: 0, score: 0 } },
+            gameState: [
+              [[], [], []],
+              [[], [], []],
+              [[], [], []],
+            ],
           };
 
-          console.log(`room ${roomId} player ${socket.id} joined`);
+          socket.emit("gameState", rooms[roomId].gameState);
 
-          rooms[roomId].players[socket.id] = { score: 0, color: 0 };
-          playerColor = 0;
-
-          if (rooms[roomId].gameState)
-            io.to(roomId).emit("gameState", rooms[roomId].gameState);
-
-          io.to(roomId).emit(
-            "eventFromServer",
-            `${socket.id} joined room: ${roomId}`
-          );
-
-          socket.emit("joinedRoom", playerColor, rooms[roomId].gameState);
-
-          socket.join(roomId);
-        } else if (Object.keys(rooms[roomId].players).length > 0) {
-          if (rooms[roomId].players[socket.id]) return;
-
-          console.log(`room ${roomId} player ${socket.id} joined`);
-
-          rooms[roomId].players[socket.id] = { score: 0, color: 1 };
-          playerColor = 1;
-
-          if (rooms[roomId].gameState)
-            io.to(roomId).emit("gameState", rooms[roomId].gameState);
-
-          io.to(roomId).emit(
-            "eventFromServer",
-            `${socket.id} joined room: ${roomId}`
-          );
-
-          socket.emit("joinedRoom", playerColor, rooms[roomId].gameState);
-
-          socket.join(roomId);
+          socket.emit("joinedRoom", roomId, 0);
         }
       });
 
-      socket.on("leaveRoom", (roomId) => {
-        console.log(`${socket.id} left room: ${roomId}`);
-        io.to(roomId).emit(
-          "eventFromServer",
-          `${socket.id} left room: ${roomId}`
-        );
-        socket.leave(roomId);
+      // need to consider: how should I store players? should I use records for quick refernce
+      // in make move and other possible event listeners? Or should I use a list for easy lenght
+      // reference for room size logic in room joining? probably the former...
 
-        // remove the player from the rooms
-        delete rooms[roomId].players[socket.id];
+      socket.on("leaveRoom", (roomCode) => {
+        const numPlayers = rooms[roomCode]
+          ? Object.keys(rooms[roomCode].players).length
+          : 0;
 
-        // check the length of players to see if all players have left
-        if (Object.keys(rooms[roomId].players).length == 0) {
-          // remove the room from rooms
-          delete rooms[roomId];
+        // if last person delete the room
+
+        // remove the player from room
+        socket.leave(roomCode);
+
+        // remove player from rooms
+        delete rooms[roomCode].players[socket.id];
+
+        if (rooms[roomCode] && numPlayers < 2) {
+          // send event to player to generate new room code
+          delete rooms[roomCode];
         }
 
-        console.log(rooms);
+        socket.emit("leftRoom");
+      });
+
+      socket.on("resetGame", (roomCode) => {
+        if (rooms[roomCode]) {
+          rooms[roomCode].gameState = [
+            [[], [], []],
+            [[], [], []],
+            [[], [], []],
+          ];
+        }
+
+        io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
       });
 
       // need to write restart socket call, in order to reset the board
 
-      socket.on("makeMove", ({ roomId, currentMove }) => {
-        console.log(`${socket.id} made move: ${currentMove["color"]}`);
+      socket.on("makeMove", ({ roomCode, currentMove }) => {
+        console.log(
+          `${socket.id} made move: ${currentMove.color} ${currentMove.size}`
+        );
+
+        console.log(roomCode);
+        console.log(rooms[roomCode].gameState);
+
         // check game logic for move, update game state, send new game state to all clients
 
         if (
-          `${rooms[roomId].players[socket.id].color}` == currentMove["color"] &&
-          !getWinner(rooms[roomId].gameState)
+          rooms[roomCode].players[socket.id].color == currentMove.color &&
+          getWinner(rooms[roomCode].gameState) === null
         ) {
-          if (isValidMove(rooms[roomId].gameState, currentMove)) {
+          if (isValidMove(rooms[roomCode].gameState, currentMove)) {
             // fix for js
-            rooms[roomId].gameState[currentMove["row"]][
-              currentMove["col"]
-            ].unshift([currentMove["color"], currentMove["size"]]);
-            console.log("game state:", rooms[roomId].gameState);
-            io.to(roomId).emit("gameState", rooms[roomId].gameState);
-            io.to(roomId).emit("eventFromServer", currentMove);
+
+            rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift(
+              {
+                color: currentMove.color,
+                size: currentMove.size,
+              }
+            );
+
+            // log the new game state
+            console.log("game state:", rooms[roomCode].gameState);
+
+            // emit new gameState to all clients in the room
+            io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
+            io.to(roomCode).emit("eventFromServer", currentMove);
           }
         }
         // if it is not a valid move, then emit a invalid message to the chat
 
         // needs to work for ties
-        let over: number | null = getWinner(rooms[roomId].gameState);
+        let over: number | null = getWinner(rooms[roomCode].gameState);
 
-        if (over) {
+        if (over !== null) {
           console.log("game over");
-          io.to(roomId).emit(
+          io.to(roomCode).emit(
             "eventFromServer",
             `game over, winner is: ${over}`
           );

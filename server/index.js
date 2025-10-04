@@ -10,9 +10,27 @@ import { handler } from "../build/handler.js";
 
 const port = process.env.PORT || 3000;
 const app = express();
+
+// Configure Express to trust proxy (required when behind Caddy)
+app.set("trust proxy", true);
+
 const server = createServer(app);
 
-const io = new Server(server);
+// Configure Socket.IO with CORS and proxy settings
+const io = new Server(server, {
+  cors: {
+    origin:
+      process.env.NODE_ENV === "production"
+        ? ["https://yourdomain.com"] // Replace with your actual domain
+        : ["http://localhost:5173", "https://localhost:8443"], // SvelteKit dev server and local Caddy
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  // Allow both WebSocket and polling transports
+  transports: ["websocket", "polling"],
+  // Configure for reverse proxy
+  allowEIO3: true,
+});
 
 const rooms = {};
 
@@ -22,6 +40,7 @@ export function possibleMoves(gameState) {
   let moves = [];
 
   let turn = getTurn(gameState);
+  console.log("turn:", turn);
 
   let pieces = getPossiblePieces(gameState);
 
@@ -33,20 +52,20 @@ export function possibleMoves(gameState) {
             if (pieces[color][k] > 0) {
               // might need to add if turn is color here, so that the empty spaces dont default
               if (gameState[i][j].length > 0) {
-                if (gameState[i][j][0][1] < k) {
+                if (gameState[i][j][0].size < k) {
                   moves.push({
-                    color: `${color}`,
-                    size: `${k}`,
-                    row: `${i}`,
-                    col: `${j}`,
+                    color: color,
+                    size: k,
+                    row: i,
+                    col: j,
                   });
                 }
               } else {
                 moves.push({
-                  color: `${color}`,
-                  size: `${k}`,
-                  row: `${i}`,
-                  col: `${j}`,
+                  color: color,
+                  size: k,
+                  row: i,
+                  col: j,
                 });
               }
               // it might have to be the strings?
@@ -68,7 +87,7 @@ export function getPossiblePieces(gameState) {
   for (let i = 0; i < gameState.length; i++) {
     for (let j = 0; j < gameState[i].length; j++) {
       for (let k = 0; k < gameState[i][j].length; k++) {
-        pieces[gameState[i][j][k][0]][gameState[i][j][k][1]] -= 1;
+        pieces[gameState[i][j][k].color][gameState[i][j][k].size] -= 1;
       }
     }
   }
@@ -79,6 +98,9 @@ export function getPossiblePieces(gameState) {
 // checks if the move is in the possible moves
 export function isValidMove(gameState, move) {
   let moves = possibleMoves(gameState);
+
+  console.log("possible moves:", moves);
+  console.log("current move:", move);
 
   for (const thing of moves) {
     if (
@@ -108,10 +130,10 @@ export function getWinner(gameState) {
       gameState[i][0].length > 0 &&
       gameState[i][1].length > 0 &&
       gameState[i][2].length > 0 &&
-      gameState[i][0][0][0] == gameState[i][1][0][0] &&
-      gameState[i][1][0][0] == gameState[i][2][0][0]
+      gameState[i][0][0].color == gameState[i][1][0].color &&
+      gameState[i][1][0].color == gameState[i][2][0].color
     ) {
-      return gameState[i][0][0][0];
+      return gameState[i][0][0].color;
     }
   }
 
@@ -121,10 +143,10 @@ export function getWinner(gameState) {
       gameState[0][i].length > 0 &&
       gameState[1][i].length > 0 &&
       gameState[2][i].length > 0 &&
-      gameState[0][i][0][0] == gameState[1][i][0][0] &&
-      gameState[1][i][0][0] == gameState[2][i][0][0]
+      gameState[0][i][0].color == gameState[1][i][0].color &&
+      gameState[1][i][0].color == gameState[2][i][0].color
     ) {
-      return gameState[0][i][0][0];
+      return gameState[0][i][0].color;
     }
   }
 
@@ -133,20 +155,20 @@ export function getWinner(gameState) {
     gameState[0][0].length > 0 &&
     gameState[1][1].length > 0 &&
     gameState[2][2].length > 0 &&
-    gameState[0][0][0][0] == gameState[1][1][0][0] &&
-    gameState[1][1][0][0] == gameState[2][2][0][0]
+    gameState[0][0][0].color == gameState[1][1][0].color &&
+    gameState[1][1][0].color == gameState[2][2][0].color
   ) {
-    return gameState[0][0][0][0];
+    return gameState[0][0][0].color;
   }
 
   if (
     gameState[2][0].length > 0 &&
     gameState[1][1].length > 0 &&
     gameState[0][2].length > 0 &&
-    gameState[2][0][0][0] == gameState[1][1][0][0] &&
-    gameState[1][1][0][0] == gameState[0][2][0][0]
+    gameState[2][0][0].color == gameState[1][1][0].color &&
+    gameState[1][1][0].color == gameState[0][2][0].color
   ) {
-    return gameState[2][0][0][0];
+    return gameState[2][0][0].color;
   }
 
   if (!possibleMoves(gameState)) {
@@ -163,7 +185,7 @@ function getTurn(gameState) {
   for (const col of gameState) {
     for (const row of col) {
       for (const cell of row) {
-        if (cell[0] == 1) {
+        if (cell.color == 1) {
           red += 1;
         } else {
           blue += 1;
@@ -180,88 +202,135 @@ function getTurn(gameState) {
 }
 
 io.on("connection", (socket) => {
+  // log connection
   socket.emit("eventFromServer", "Hello, World 👋");
   console.log("player connected:", socket.id);
 
-  socket.on("joinRoom", ({ roomId, gameState }) => {
-    console.log(`${socket.id} joined room: ${roomId}`);
-    console.log("currentGameState:", gameState);
-
+  socket.on("joinRoom", ({ roomId, currentRoom }) => {
     let playerColor;
 
     // better handling for joining rooms multiple times
     // checking if socket id is already in players for that room
-    if (!rooms[roomId]) {
+
+    // Get the number of players in the room using Object.keys
+    const numPlayers = rooms[roomId]
+      ? Object.keys(rooms[roomId].players).length
+      : 0;
+
+    if (rooms[roomId] && numPlayers < 2 && currentRoom != roomId) {
+      // leave current Room
+      socket.leave(currentRoom);
+
+      // join the room
+      socket.join(roomId);
+
+      // assign player color
+      rooms[roomId].players[socket.id] = { color: 1, score: 0 };
+
+      socket.emit("gameState", rooms[roomId].gameState);
+
+      console.log(roomId);
+
+      socket.emit("joinedRoom", roomId, 1);
+    } else if (!rooms[roomId]) {
+      // create the room
+      socket.join(roomId);
+
       rooms[roomId] = {
-        players: {},
-        gameState: gameState,
+        players: { [socket.id]: { color: 0, score: 0 } },
+        gameState: [
+          [[], [], []],
+          [[], [], []],
+          [[], [], []],
+        ],
       };
 
-      rooms[roomId].players[socket.id] = { score: 0, color: 0 };
-      playerColor = 0;
-    } else {
-      rooms[roomId].players[socket.id] = { score: 0, color: 1 };
-      playerColor = 1;
+      socket.emit("gameState", rooms[roomId].gameState);
+
+      socket.emit("joinedRoom", roomId, 0);
     }
-    // update gamestate for newly connected players
-
-    // send game state to client
-    io.to(roomId).emit("gameState", rooms[roomId].gameState);
-    io.to(roomId).emit(
-      "eventFromServer",
-      `${socket.id} joined room: ${roomId}`
-    );
-
-    // Send the player's color to the specific socket that joined
-    socket.emit("joinedRoom", playerColor);
-
-    socket.join(roomId);
   });
 
-  socket.on("leaveRoom", (roomId) => {
-    console.log(`${socket.id} left room: ${roomId}`);
-    io.to(roomId).emit("eventFromServer", `${socket.id} left room: ${roomId}`);
-    socket.leave(roomId);
+  // need to consider: how should I store players? should I use records for quick refernce
+  // in make move and other possible event listeners? Or should I use a list for easy lenght
+  // reference for room size logic in room joining? probably the former...
 
-    // remove the player from the rooms
-    delete rooms[roomId].players[socket.id];
+  socket.on("leaveRoom", (roomCode) => {
+    const numPlayers = rooms[roomCode]
+      ? Object.keys(rooms[roomCode].players).length
+      : 0;
 
-    // check the length of players to see if all players have left
-    if (Object.keys(rooms[roomId].players).length == 0) {
-      // remove the room from rooms
-      delete rooms[roomId];
+    // if last person delete the room
+
+    // remove the player from room
+    socket.leave(roomCode);
+
+    // remove player from rooms
+    delete rooms[roomCode].players[socket.id];
+
+    if (rooms[roomCode] && numPlayers < 2) {
+      // send event to player to generate new room code
+      delete rooms[roomCode];
     }
-    console.log(rooms);
+
+    socket.emit("leftRoom");
+  });
+
+  socket.on("resetGame", (roomCode) => {
+    if (rooms[roomCode]) {
+      rooms[roomCode].gameState = [
+        [[], [], []],
+        [[], [], []],
+        [[], [], []],
+      ];
+    }
+
+    io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
   });
 
   // need to write restart socket call, in order to reset the board
 
-  socket.on("makeMove", ({ roomId, currentMove }) => {
-    console.log(`${socket.id} made move: ${currentMove["color"]}`);
+  socket.on("makeMove", ({ roomCode, currentMove }) => {
+    console.log(
+      `${socket.id} made move: ${currentMove.color} ${currentMove.size}`
+    );
+
+    console.log(roomCode);
+    console.log(rooms[roomCode].gameState);
+
     // check game logic for move, update game state, send new game state to all clients
-    console.log(rooms[roomId].players[socket.id].color, currentMove["color"]);
-    if (rooms[roomId].players[socket.id].color == currentMove["color"]) {
-      if (isValidMove(rooms[roomId].gameState, currentMove)) {
+
+    if (
+      rooms[roomCode].players[socket.id].color == currentMove.color &&
+      getWinner(rooms[roomCode].gameState) === null
+    ) {
+      if (isValidMove(rooms[roomCode].gameState, currentMove)) {
         // fix for js
-        rooms[roomId].gameState[currentMove["row"]][currentMove["col"]].unshift(
-          [currentMove["color"], currentMove["size"]]
-        );
-        console.log("game state:", rooms[roomId].gameState);
-        io.to(roomId).emit("gameState", rooms[roomId].gameState);
-        io.to(roomId).emit("eventFromServer", currentMove);
+
+        rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift({
+          color: currentMove.color,
+          size: currentMove.size,
+        });
+
+        // log the new game state
+        console.log("game state:", rooms[roomCode].gameState);
+
+        // emit new gameState to all clients in the room
+        io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
+        io.to(roomCode).emit("eventFromServer", currentMove);
       }
     }
     // if it is not a valid move, then emit a invalid message to the chat
 
     // needs to work for ties
-    let over = getWinner(rooms[roomId].gameState);
-    if (over) {
+    let over = getWinner(rooms[roomCode].gameState);
+
+    if (over !== null) {
       console.log("game over");
-      io.to(roomId).emit("eventFromServer", `game over, winner is: ${over}`);
+      io.to(roomCode).emit("eventFromServer", `game over, winner is: ${over}`);
     }
   });
 });
-
 // SvelteKit should handle everything else using Express middleware
 // https://github.com/sveltejs/kit/tree/master/packages/adapter-node#custom-server
 app.use(handler);
