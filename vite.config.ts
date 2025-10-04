@@ -6,6 +6,7 @@ import { Server } from "socket.io";
 import { isValidMove, getWinner, isGameOver } from "./src/lib/gameLogic";
 
 import type { state } from "./src/lib/gameLogic.js";
+import { get } from "svelte/store";
 
 // basically works
 type roomsType = {
@@ -30,37 +31,53 @@ const webSocketServer = {
       console.log("player connected:", socket.id);
 
       socket.on("joinRoom", ({ roomId, gameState }) => {
-        console.log(`${socket.id} joined room: ${roomId}`);
-        console.log("currentGameState:", gameState);
-
         let playerColor;
 
         // better handling for joining rooms multiple times
         // checking if socket id is already in players for that room
+
         if (!rooms[roomId]) {
           rooms[roomId] = {
             players: {},
             gameState: gameState,
           };
 
+          console.log(`room ${roomId} player ${socket.id} joined`);
+
           rooms[roomId].players[socket.id] = { score: 0, color: 0 };
           playerColor = 0;
-        } else {
+
+          if (rooms[roomId].gameState)
+            io.to(roomId).emit("gameState", rooms[roomId].gameState);
+
+          io.to(roomId).emit(
+            "eventFromServer",
+            `${socket.id} joined room: ${roomId}`
+          );
+
+          socket.emit("joinedRoom", playerColor, rooms[roomId].gameState);
+
+          socket.join(roomId);
+        } else if (Object.keys(rooms[roomId].players).length > 0) {
+          if (rooms[roomId].players[socket.id]) return;
+
+          console.log(`room ${roomId} player ${socket.id} joined`);
+
           rooms[roomId].players[socket.id] = { score: 0, color: 1 };
           playerColor = 1;
+
+          if (rooms[roomId].gameState)
+            io.to(roomId).emit("gameState", rooms[roomId].gameState);
+
+          io.to(roomId).emit(
+            "eventFromServer",
+            `${socket.id} joined room: ${roomId}`
+          );
+
+          socket.emit("joinedRoom", playerColor, rooms[roomId].gameState);
+
+          socket.join(roomId);
         }
-        // update gamestate for newly connected players
-
-        // send game state to client
-        io.to(roomId).emit("gameState", rooms[roomId].gameState);
-        io.to(roomId).emit(
-          "eventFromServer",
-          `${socket.id} joined room: ${roomId}`
-        );
-
-        socket.emit("joinedRoom", playerColor);
-
-        socket.join(roomId);
       });
 
       socket.on("leaveRoom", (roomId) => {
@@ -79,6 +96,7 @@ const webSocketServer = {
           // remove the room from rooms
           delete rooms[roomId];
         }
+
         console.log(rooms);
       });
 
@@ -87,11 +105,11 @@ const webSocketServer = {
       socket.on("makeMove", ({ roomId, currentMove }) => {
         console.log(`${socket.id} made move: ${currentMove["color"]}`);
         // check game logic for move, update game state, send new game state to all clients
-        console.log(
-          rooms[roomId].players[socket.id].color,
-          currentMove["color"]
-        );
-        if (rooms[roomId].players[socket.id].color == currentMove["color"]) {
+
+        if (
+          `${rooms[roomId].players[socket.id].color}` == currentMove["color"] &&
+          !getWinner(rooms[roomId].gameState)
+        ) {
           if (isValidMove(rooms[roomId].gameState, currentMove)) {
             // fix for js
             rooms[roomId].gameState[currentMove["row"]][
@@ -106,6 +124,7 @@ const webSocketServer = {
 
         // needs to work for ties
         let over: number | null = getWinner(rooms[roomId].gameState);
+
         if (over) {
           console.log("game over");
           io.to(roomId).emit(
