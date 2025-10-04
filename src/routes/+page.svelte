@@ -1,7 +1,9 @@
 <script lang="ts">
-  // the games state will the a 2d array of tuples
+  // Maybe try a differnt gameState, we are going to use a 2d array
+  // nulled pieces for unoccupied spaces
+  // this would lead to safer logic, but it would have to be re written in certain spots
   // [
-  //   [[("b", "l"), ("r", "s")], [], []],
+  //   [[("b", "l"), ("r", "s"), (-1, -1)], [(-1, -1), (-1,-1)], [(-1, -1), (-1,-1), (-1,-1)]],
   //   [[], [], [("b", "l"), ("r", "s")]],
   //   [[], [("b", "l"), ("r", "s")], []]
   // ]

@@ -162,7 +162,7 @@ export function getWinner(gameState: state): number | null {
 }
 
 // blue is always first
-function getTurn(gameState: state): any {
+export function getTurn(gameState: state): any {
   let red = 0;
   let blue = 0;
   for (const col of gameState) {

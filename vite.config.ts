@@ -3,7 +3,12 @@ import { type ViteDevServer, defineConfig } from "vite";
 
 import { Server } from "socket.io";
 
-import { isValidMove, getWinner, isGameOver } from "./src/lib/gameLogic";
+import {
+  isValidMove,
+  getWinner,
+  isGameOver,
+  getTurn,
+} from "./src/lib/gameLogic";
 
 import type { state } from "./src/lib/gameLogic.js";
 import { get } from "svelte/store";
@@ -49,14 +54,25 @@ const webSocketServer = {
           // join the room
           socket.join(roomId);
 
+          // get current player color
+          let playerColor = 1;
+
+          const playerKeys = Object.keys(rooms[roomId].players);
+          if (
+            playerKeys.length > 0 &&
+            rooms[roomId].players[playerKeys[0]].color == 1
+          ) {
+            playerColor = 0;
+          }
+
           // assign player color
-          rooms[roomId].players[socket.id] = { color: 1, score: 0 };
+          rooms[roomId].players[socket.id] = { color: playerColor, score: 0 };
 
           socket.emit("gameState", rooms[roomId].gameState);
 
           console.log(roomId);
 
-          socket.emit("joinedRoom", roomId, 1);
+          socket.emit("joinedRoom", roomId, playerColor);
         } else if (!rooms[roomId]) {
           // create the room
           socket.join(roomId);
