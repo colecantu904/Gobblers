@@ -27,7 +27,10 @@ COPY --from=build /app/build ./build
 # Copy server files
 COPY server ./server
 
+# Copy static files if they exist
+COPY --from=build /app/static ./static
+
 EXPOSE 3000
 
-# Start the Node.js server (not nginx)
+# Start the Node.js server
 CMD ["node", "server/index.js"]

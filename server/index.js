@@ -1,6 +1,8 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import { handler } from "../build/handler.js";
 
@@ -16,7 +18,7 @@ app.set("trust proxy", true);
 
 const server = createServer(app);
 
-// Configure Socket.IO with CORS and proxy settings
+// // Configure Socket.IO with CORS and proxy settings
 const io = new Server(server, {
   cors: {
     origin:
@@ -31,6 +33,14 @@ const io = new Server(server, {
   // Configure for reverse proxy
   allowEIO3: true,
 });
+// this is the current build
+// Serve static files from build/client
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "../build/client")));
+app.use(express.static(path.join(__dirname, "../build/client")));
+
+// ...existing Socket.IO configuration...
 
 const rooms = {};
 
