@@ -11,6 +11,7 @@ import { handler } from "../build/handler.js";
 // import { isValidMove, getWinner } from "../src/lib/gameLogic.js";
 
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || "0.0.0.0"; // Add this line
 const app = express();
 
 // Configure Express to trust proxy (required when behind Caddy)
@@ -356,4 +357,4 @@ io.on("connection", (socket) => {
 // https://github.com/sveltejs/kit/tree/master/packages/adapter-node#custom-server
 app.use(handler);
 
-server.listen(port);
+server.listen(port, host);
