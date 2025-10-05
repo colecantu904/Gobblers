@@ -24,16 +24,25 @@ const io = new Server(server, {
   cors: {
     origin:
       process.env.NODE_ENV === "production"
-        ? ["https://yourdomain.com"] // Replace with your actual domain
-        : ["http://localhost:5173", "https://localhost:8443"], // SvelteKit dev server and local Caddy
+        ? [
+            "https://yourdomain.com",
+            `http://${process.env.SERVER_IP || "localhost"}`,
+            `http://${process.env.SERVER_IP || "localhost"}:80`,
+          ]
+        : [
+            "http://localhost:5173",
+            "https://localhost:8443",
+            "http://localhost",
+            "http://localhost:80",
+            "http://localhost:3000",
+          ],
     methods: ["GET", "POST"],
     credentials: true,
   },
-  // Allow both WebSocket and polling transports
   transports: ["websocket", "polling"],
-  // Configure for reverse proxy
   allowEIO3: true,
 });
+
 // this is the current build
 // Serve static files from build/client
 const __filename = fileURLToPath(import.meta.url);
@@ -353,8 +362,11 @@ io.on("connection", (socket) => {
     }
   });
 });
+
 // SvelteKit should handle everything else using Express middleware
 // https://github.com/sveltejs/kit/tree/master/packages/adapter-node#custom-server
 app.use(handler);
 
-server.listen(port, host);
+server.listen(port, host, () => {
+  console.log(`Server running on http://${host}:${port}`);
+});
