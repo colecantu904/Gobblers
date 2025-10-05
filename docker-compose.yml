@@ -22,8 +22,6 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
       - caddy_config:/config
-    environment:
-      - SERVER_IP=${SERVER_IP}
     networks:
       - app-network
     depends_on:

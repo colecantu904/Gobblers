@@ -33,7 +33,7 @@
   });
 
   // they are strings right now because ts is retarded
-  const sizes = ["40px", "70px", "100px"];
+  const sizes = ["30px", "60px", "90px"];
 
   let currentPiece: { color: number; size: number } | null = null;
 
@@ -44,7 +44,7 @@
   let currentPieces = [];
   $: currentPieces = getPossiblePieces(gameState);
 
-  let chats: string[] = ["Welcome to gobblers!"];
+  let chats: string[] = [];
 
   let currentMove: Record<string, number> = {
     color: -1,
@@ -66,6 +66,15 @@
   $: gameState = gameState;
 
   socket.on("eventFromServer", (message) => {
+    if (message.size) {
+      message =
+        `${message.color == 0 ? "b" : "r"}` +
+        `${message.size}` +
+        `${message.row}` +
+        `${message.col}`;
+      console.log(message);
+    }
+
     chats = [...chats, message];
     console.log(chats);
   });
@@ -117,10 +126,24 @@
   <!-- lets just stick wiht making a working room joining system and stuff -->
 
   <!-- Room join system -->
-  <h2 style="padding: 1rem;">{roomCode}</h2>
+  <button
+    class="room-code-button"
+    on:click={async () => {
+      try {
+        await navigator.clipboard.writeText(roomCode);
+        console.log("Succesfuly Copies");
+      } catch (err) {
+        console.log("failed to copy roomcode", err);
+      }
+    }}
+  >
+    <h2 style="margin: 0">{roomCode}</h2>
+  </button>
+
   <form
     on:submit|preventDefault={() =>
       socket.emit("joinRoom", { roomId, roomCode })}
+    class="room-form"
   >
     <input
       type="text"
@@ -128,13 +151,15 @@
       bind:value={roomId}
       required
     />
-    <button type="submit">Join room</button>
-    <button type="button" on:click={() => socket.emit("leaveRoom", roomCode)}
-      >Leave room</button
-    >
-    <button type="button" on:click={() => socket.emit("resetGame", roomCode)}
-      >Reset Game</button
-    >
+    <div>
+      <button type="submit">Join room</button>
+      <button type="button" on:click={() => socket.emit("leaveRoom", roomCode)}
+        >Leave room</button
+      >
+      <button type="button" on:click={() => socket.emit("resetGame", roomCode)}
+        >Reset Game</button
+      >
+    </div>
   </form>
 
   <!-- Game board -->
@@ -201,7 +226,6 @@
 
     <!-- players pieces on the right of the board -->
     <div class="pieces-container">
-      <h3>Your pieces</h3>
       {#each currentPieces[Number(playerColor)] as piece, index}
         {#if piece > 0}
           <button
@@ -234,10 +258,12 @@
   </div>
 
   <!-- Chat -->
-  <h3>Chat</h3>
-  {#each chats as message}
-    <p>{message}</p>
-  {/each}
+  <h3 style="display: none">👇 Move History 👇</h3>
+  <div class="message-container" style="display: none">
+    {#each chats as message}
+      <p style="padding-right: 5px">{message}</p>
+    {/each}
+  </div>
 </div>
 
 <style>
@@ -246,10 +272,17 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #3a3740;
     color: white;
     font-family: Arial, sans-serif;
-    gap: 20px;
+    gap: 25px;
+  }
+
+  .room-code-button {
+    background-color: #6c6c6c;
+    border-radius: 5px;
+    margin: 20px;
+    margin-top: 45px;
+    padding: 15px;
   }
 
   #board-container {
@@ -257,6 +290,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
+    gap: 10px;
   }
 
   @media (max-width: 500px) {
@@ -272,6 +306,13 @@
     justify-content: center;
     gap: 10px;
     margin-left: 20px;
+  }
+
+  @media (max-width: 500px) {
+    .pieces-container {
+      flex-direction: row-reverse;
+      margin-left: 0px;
+    }
   }
 
   .piece-selector {
@@ -302,6 +343,9 @@
     justify-content: center;
     cursor: pointer;
     background-color: #f8f8f8;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
   }
 
   @media (max-width: 500px) {
@@ -321,5 +365,24 @@
     font-weight: bold;
     border-radius: 50%;
     cursor: grab;
+  }
+
+  .room-form {
+    display: flex;
+    flex-direction: row;
+  }
+
+  @media (max-width: 500px) {
+    .room-form {
+      flex-direction: column;
+      gap: 5px;
+    }
+  }
+
+  .message-container {
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 </style>

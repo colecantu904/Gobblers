@@ -18,6 +18,7 @@ type roomsType = {
   [key: string]: {
     players: Record<string, Record<string, number | string>>;
     gameState: state;
+    history: Array<Record<string, number>>;
   };
 };
 
@@ -33,7 +34,6 @@ const webSocketServer = {
 
     io.on("connection", (socket) => {
       // log connection
-      socket.emit("eventFromServer", "Hello, World 👋");
       console.log("player connected:", socket.id);
 
       socket.on("joinRoom", ({ roomId, currentRoom }) => {
@@ -84,6 +84,7 @@ const webSocketServer = {
               [[], [], []],
               [[], [], []],
             ],
+            history: [],
           };
 
           socket.emit("gameState", rooms[roomId].gameState);
@@ -157,6 +158,9 @@ const webSocketServer = {
 
             // log the new game state
             console.log("game state:", rooms[roomCode].gameState);
+
+            // add move to room history
+            rooms[roomCode].history.push(currentMove);
 
             // emit new gameState to all clients in the room
             io.to(roomCode).emit("gameState", rooms[roomCode].gameState);

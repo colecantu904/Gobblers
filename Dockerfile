@@ -30,8 +30,8 @@ COPY server ./server
 # Copy static files if they exist
 COPY --from=build /app/static ./static
 
-# this is a build arg passed to the build
-ENV SERVER_IP=${SERVER_IP}
+# You have got to pass the server ip as a build arg for the node server
+ENV SERVER_IP=localhost
 
 EXPOSE 3000
 
