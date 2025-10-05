@@ -23,6 +23,7 @@ const server = createServer(app);
 const io = new Server(server, {
   cors: {
     origin:
+      // aleternativly, we can trust all proxies with "*"
       process.env.NODE_ENV === "production"
         ? [
             "https://yourdomain.com",

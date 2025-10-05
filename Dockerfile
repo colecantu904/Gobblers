@@ -30,6 +30,9 @@ COPY server ./server
 # Copy static files if they exist
 COPY --from=build /app/static ./static
 
+# this is a build arg passed to the build
+ENV SERVER_IP=${SERVER_IP}
+
 EXPOSE 3000
 
 # Start the Node.js server
