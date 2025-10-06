@@ -51,8 +51,6 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, "../build/client")));
 app.use(express.static(path.join(__dirname, "../build/client")));
 
-// ...existing Socket.IO configuration...
-
 const rooms = {};
 
 // for now just copy the functions here
@@ -61,7 +59,6 @@ export function possibleMoves(gameState) {
   let moves = [];
 
   let turn = getTurn(gameState);
-  console.log("turn:", turn);
 
   let pieces = getPossiblePieces(gameState);
 
@@ -120,9 +117,6 @@ export function getPossiblePieces(gameState) {
 export function isValidMove(gameState, move) {
   let moves = possibleMoves(gameState);
 
-  console.log("possible moves:", moves);
-  console.log("current move:", move);
-
   for (const thing of moves) {
     if (
       thing.color === move.color &&
@@ -139,7 +133,6 @@ export function isValidMove(gameState, move) {
 
 // checks if the board is in a terminal state, and returns the winner or tie (no possible moves), or null for not
 export function isGameOver(gameState) {
-  console.log("isGameOver");
   return null;
 }
 
@@ -224,8 +217,12 @@ function getTurn(gameState) {
 
 io.on("connection", (socket) => {
   // log connection
-  socket.emit("eventFromServer", "Hello, World 👋");
   console.log("player connected:", socket.id);
+
+  // to emit a new color shceme on every connection!
+  // this however would be per player and not per room
+  // just for fun if you get the chance
+  socket.emit("colors", "blue", "red");
 
   socket.on("joinRoom", ({ roomId, currentRoom }) => {
     let playerColor;
@@ -259,9 +256,7 @@ io.on("connection", (socket) => {
       // assign player color
       rooms[roomId].players[socket.id] = { color: playerColor, score: 0 };
 
-      socket.emit("gameState", rooms[roomId].gameState);
-
-      console.log(roomId);
+      socket.emit("gameState", rooms[roomId].gameState, rooms[roomId].history);
 
       socket.emit("joinedRoom", roomId, playerColor);
     } else if (!rooms[roomId]) {
@@ -275,9 +270,10 @@ io.on("connection", (socket) => {
           [[], [], []],
           [[], [], []],
         ],
+        history: [],
       };
 
-      socket.emit("gameState", rooms[roomId].gameState);
+      socket.emit("gameState", rooms[roomId].gameState, rooms[roomId].history);
 
       socket.emit("joinedRoom", roomId, 0);
     }
@@ -288,24 +284,26 @@ io.on("connection", (socket) => {
   // reference for room size logic in room joining? probably the former...
 
   socket.on("leaveRoom", (roomCode) => {
-    const numPlayers = rooms[roomCode]
-      ? Object.keys(rooms[roomCode].players).length
-      : 0;
+    if (rooms[roomCode]) {
+      const numPlayers = rooms[roomCode]
+        ? Object.keys(rooms[roomCode].players).length
+        : 0;
 
-    // if last person delete the room
+      // if last person delete the room
 
-    // remove the player from room
-    socket.leave(roomCode);
+      // remove the player from room
+      socket.leave(roomCode);
 
-    // remove player from rooms
-    delete rooms[roomCode].players[socket.id];
+      // remove player from rooms
+      delete rooms[roomCode].players[socket.id];
 
-    if (rooms[roomCode] && numPlayers < 2) {
-      // send event to player to generate new room code
-      delete rooms[roomCode];
+      if (rooms[roomCode] && numPlayers < 2) {
+        // send event to player to generate new room code
+        delete rooms[roomCode];
+      }
+
+      socket.emit("leftRoom");
     }
-
-    socket.emit("leftRoom");
   });
 
   socket.on("resetGame", (roomCode) => {
@@ -315,51 +313,58 @@ io.on("connection", (socket) => {
         [[], [], []],
         [[], [], []],
       ];
-    }
 
-    io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
+      rooms[roomCode].history = [];
+
+      io.to(roomCode).emit(
+        "gameState",
+        rooms[roomCode].gameState,
+        rooms[roomCode].history
+      );
+    }
   });
 
   // need to write restart socket call, in order to reset the board
 
   socket.on("makeMove", ({ roomCode, currentMove }) => {
-    console.log(
-      `${socket.id} made move: ${currentMove.color} ${currentMove.size}`
-    );
+    if (rooms[roomCode]) {
+      // check game logic for move, update game state, send new game state to all clients
 
-    console.log(roomCode);
-    console.log(rooms[roomCode].gameState);
+      if (
+        rooms[roomCode].players[socket.id].color == currentMove.color &&
+        getWinner(rooms[roomCode].gameState) === null
+      ) {
+        if (isValidMove(rooms[roomCode].gameState, currentMove)) {
+          // fix for js
 
-    // check game logic for move, update game state, send new game state to all clients
+          rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift({
+            color: currentMove.color,
+            size: currentMove.size,
+          });
 
-    if (
-      rooms[roomCode].players[socket.id].color == currentMove.color &&
-      getWinner(rooms[roomCode].gameState) === null
-    ) {
-      if (isValidMove(rooms[roomCode].gameState, currentMove)) {
-        // fix for js
+          // add move to room history
+          rooms[roomCode].history.push(currentMove);
 
-        rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift({
-          color: currentMove.color,
-          size: currentMove.size,
-        });
-
-        // log the new game state
-        console.log("game state:", rooms[roomCode].gameState);
-
-        // emit new gameState to all clients in the room
-        io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
-        io.to(roomCode).emit("eventFromServer", currentMove);
+          // emit new gameState to all clients in the room
+          io.to(roomCode).emit(
+            "gameState",
+            rooms[roomCode].gameState,
+            rooms[roomCode].history
+          );
+        }
       }
-    }
-    // if it is not a valid move, then emit a invalid message to the chat
+      // if it is not a valid move, then emit a invalid message to the chat
 
-    // needs to work for ties
-    let over = getWinner(rooms[roomCode].gameState);
+      // needs to work for ties
+      let over = getWinner(rooms[roomCode].gameState);
 
-    if (over !== null) {
-      console.log("game over");
-      io.to(roomCode).emit("eventFromServer", `game over, winner is: ${over}`);
+      if (over !== null) {
+        console.log("game over");
+        io.to(roomCode).emit(
+          "eventFromServer",
+          `game over, winner is: ${over}`
+        );
+      }
     }
   });
 });

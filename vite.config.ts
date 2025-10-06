@@ -11,7 +11,6 @@ import {
 } from "./src/lib/gameLogic";
 
 import type { state } from "./src/lib/gameLogic.js";
-import { get } from "svelte/store";
 
 // basically works
 type roomsType = {
@@ -35,6 +34,11 @@ const webSocketServer = {
     io.on("connection", (socket) => {
       // log connection
       console.log("player connected:", socket.id);
+
+      // to emit a new color shceme on every connection!
+      // this however would be per player and not per room
+      // just for fun if you get the chance
+      socket.emit("colors", "blue", "red");
 
       socket.on("joinRoom", ({ roomId, currentRoom }) => {
         let playerColor;
@@ -68,7 +72,11 @@ const webSocketServer = {
           // assign player color
           rooms[roomId].players[socket.id] = { color: playerColor, score: 0 };
 
-          socket.emit("gameState", rooms[roomId].gameState);
+          socket.emit(
+            "gameState",
+            rooms[roomId].gameState,
+            rooms[roomId].history
+          );
 
           console.log(roomId);
 
@@ -87,7 +95,11 @@ const webSocketServer = {
             history: [],
           };
 
-          socket.emit("gameState", rooms[roomId].gameState);
+          socket.emit(
+            "gameState",
+            rooms[roomId].gameState,
+            rooms[roomId].history
+          );
 
           socket.emit("joinedRoom", roomId, 0);
         }
@@ -98,24 +110,26 @@ const webSocketServer = {
       // reference for room size logic in room joining? probably the former...
 
       socket.on("leaveRoom", (roomCode) => {
-        const numPlayers = rooms[roomCode]
-          ? Object.keys(rooms[roomCode].players).length
-          : 0;
+        if (rooms[roomCode]) {
+          const numPlayers = rooms[roomCode]
+            ? Object.keys(rooms[roomCode].players).length
+            : 0;
 
-        // if last person delete the room
+          // if last person delete the room
 
-        // remove the player from room
-        socket.leave(roomCode);
+          // remove the player from room
+          socket.leave(roomCode);
 
-        // remove player from rooms
-        delete rooms[roomCode].players[socket.id];
+          // remove player from rooms
+          delete rooms[roomCode].players[socket.id];
 
-        if (rooms[roomCode] && numPlayers < 2) {
-          // send event to player to generate new room code
-          delete rooms[roomCode];
+          if (rooms[roomCode] && numPlayers < 2) {
+            // send event to player to generate new room code
+            delete rooms[roomCode];
+          }
+
+          socket.emit("leftRoom");
         }
-
-        socket.emit("leftRoom");
       });
 
       socket.on("resetGame", (roomCode) => {
@@ -125,59 +139,63 @@ const webSocketServer = {
             [[], [], []],
             [[], [], []],
           ];
-        }
 
-        io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
+          rooms[roomCode].history = [];
+
+          io.to(roomCode).emit(
+            "gameState",
+            rooms[roomCode].gameState,
+            rooms[roomCode].history
+          );
+        }
       });
 
       // need to write restart socket call, in order to reset the board
 
       socket.on("makeMove", ({ roomCode, currentMove }) => {
-        console.log(
-          `${socket.id} made move: ${currentMove.color} ${currentMove.size}`
-        );
+        if (rooms[roomCode]) {
+          // check game logic for move, update game state, send new game state to all clients
 
-        console.log(roomCode);
-        console.log(rooms[roomCode].gameState);
+          if (
+            rooms[roomCode].players[socket.id].color == currentMove.color &&
+            getWinner(rooms[roomCode].gameState) === null
+          ) {
+            if (isValidMove(rooms[roomCode].gameState, currentMove)) {
+              // fix for js
 
-        // check game logic for move, update game state, send new game state to all clients
-
-        if (
-          rooms[roomCode].players[socket.id].color == currentMove.color &&
-          getWinner(rooms[roomCode].gameState) === null
-        ) {
-          if (isValidMove(rooms[roomCode].gameState, currentMove)) {
-            // fix for js
-
-            rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift(
-              {
+              rooms[roomCode].gameState[currentMove.row][
+                currentMove.col
+              ].unshift({
                 color: currentMove.color,
                 size: currentMove.size,
-              }
-            );
+              });
 
-            // log the new game state
-            console.log("game state:", rooms[roomCode].gameState);
+              // log the new game state
+              console.log("game state:", rooms[roomCode].gameState);
 
-            // add move to room history
-            rooms[roomCode].history.push(currentMove);
+              // add move to room history
+              rooms[roomCode].history.push(currentMove);
 
-            // emit new gameState to all clients in the room
-            io.to(roomCode).emit("gameState", rooms[roomCode].gameState);
-            io.to(roomCode).emit("eventFromServer", currentMove);
+              // emit new gameState to all clients in the room
+              io.to(roomCode).emit(
+                "gameState",
+                rooms[roomCode].gameState,
+                rooms[roomCode].history
+              );
+            }
           }
-        }
-        // if it is not a valid move, then emit a invalid message to the chat
+          // if it is not a valid move, then emit a invalid message to the chat
 
-        // needs to work for ties
-        let over: number | null = getWinner(rooms[roomCode].gameState);
+          // needs to work for ties
+          let over: number | null = getWinner(rooms[roomCode].gameState);
 
-        if (over !== null) {
-          console.log("game over");
-          io.to(roomCode).emit(
-            "eventFromServer",
-            `game over, winner is: ${over}`
-          );
+          if (over !== null) {
+            console.log("game over");
+            io.to(roomCode).emit(
+              "eventFromServer",
+              `game over, winner is: ${over}`
+            );
+          }
         }
       });
     });

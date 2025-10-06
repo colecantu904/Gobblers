@@ -46,6 +46,8 @@
 
   let chats: string[] = [];
 
+  let history: Array<Record<string, number>> = [];
+
   let currentMove: Record<string, number> = {
     color: -1,
     size: -1,
@@ -63,40 +65,28 @@
     [[], [], []],
   ];
 
-  $: gameState = gameState;
+  let color1 = "yellow";
 
-  socket.on("eventFromServer", (message) => {
-    if (message.size) {
-      message =
-        `${message.color == 0 ? "b" : "r"}` +
-        `${message.size}` +
-        `${message.row}` +
-        `${message.col}`;
-      console.log(message);
-    }
+  let color2 = "red";
 
-    chats = [...chats, message];
-    console.log(chats);
+  socket.on("colors", (newColor1, newColor2) => {
+    color1 = newColor1;
+    color2 = newColor2;
   });
 
-  socket.on("gameState", (newGameState) => {
-    console.log(newGameState);
+  socket.on("gameState", (newGameState, newHistory) => {
     gameState = [...newGameState];
+    history = [...newHistory];
   });
 
   socket.on("joinedRoom", (newRoomCode, color) => {
-    console.log("joined room", newRoomCode, color);
     if (!newRoomCode) {
-      console.error("No room code received from server");
       return;
     }
 
     roomCode = newRoomCode;
 
     playerColor = color;
-    console.log(color);
-
-    console.log(`You are player ${playerColor}`);
   });
 
   socket.on("leftRoom", () => {
@@ -131,7 +121,6 @@
     on:click={async () => {
       try {
         await navigator.clipboard.writeText(roomCode);
-        console.log("Succesfuly Copies");
       } catch (err) {
         console.log("failed to copy roomcode", err);
       }
@@ -141,8 +130,10 @@
   </button>
 
   <form
-    on:submit|preventDefault={() =>
-      socket.emit("joinRoom", { roomId, roomCode })}
+    on:submit|preventDefault={() => {
+      socket.emit("joinRoom", { roomId, roomCode });
+      roomId = "";
+    }}
     class="room-form"
   >
     <input
@@ -180,7 +171,6 @@
                   col: cellIndex,
                 };
                 socket.emit("makeMove", { roomCode, currentMove });
-                console.log(currentMove);
                 currentPiece = null;
               }
             }}
@@ -202,18 +192,17 @@
             }}
           >
             {#if cell.length > 0}
-              {console.log(cell[0].size, sizes[cell[0].size])}
               {#if cell[0].color == 0}
                 <div
                   class="piece"
-                  style="background-color: blue; height: {sizes[
+                  style="background-color: {color1}; height: {sizes[
                     cell[0].size
                   ]}; width: {sizes[cell[0].size]};"
                 ></div>
               {:else}
                 <div
                   class="piece"
-                  style="background-color: red; height: {sizes[
+                  style="background-color: {color2}; height: {sizes[
                     cell[0].size
                   ]}; width: {sizes[cell[0].size]};"
                 ></div>
@@ -234,14 +223,13 @@
             aria-label="Select piece"
             on:click={() => {
               currentPiece = { color: playerColor, size: index };
-              console.log(currentPiece);
             }}
           >
             <div
               class="piece"
               style="background-color: {playerColor == 0
-                ? 'blue'
-                : 'red'}; height: {index == 2
+                ? color1
+                : color2}; height: {index == 2
                 ? '120px'
                 : index == 1
                   ? '80px'
@@ -258,10 +246,12 @@
   </div>
 
   <!-- Chat -->
-  <h3 style="display: none">👇 Move History 👇</h3>
-  <div class="message-container" style="display: none">
-    {#each chats as message}
-      <p style="padding-right: 5px">{message}</p>
+  <h3>👇 Move History 👇</h3>
+  <div class="message-container">
+    {#each history as message}
+      <p style="padding-right: 5px">
+        {message.color}{message.size}{message.row}{message.col}
+      </p>
     {/each}
   </div>
 </div>
@@ -275,6 +265,7 @@
     color: white;
     font-family: Arial, sans-serif;
     gap: 25px;
+    padding: 8px;
   }
 
   .room-code-button {
@@ -381,7 +372,6 @@
 
   .message-container {
     display: flex;
-    width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
   }
