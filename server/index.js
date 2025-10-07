@@ -224,6 +224,19 @@ io.on("connection", (socket) => {
   // just for fun if you get the chance
   socket.emit("colors", "blue", "red");
 
+  // yea, so we need to delete disconnected players...
+  socket.on("disconnect", () => {
+    for (const roomCode in rooms) {
+      if (rooms[roomCode].players[socket.id]) {
+        delete rooms[roomCode].players[socket.id];
+
+        if (Object.keys(rooms[roomCode].players) < 1) {
+          delete rooms[roomCode];
+        }
+      }
+    }
+  });
+
   socket.on("joinRoom", ({ roomId, currentRoom }) => {
     let playerColor;
 
@@ -330,27 +343,32 @@ io.on("connection", (socket) => {
     if (rooms[roomCode]) {
       // check game logic for move, update game state, send new game state to all clients
 
-      if (
-        rooms[roomCode].players[socket.id].color == currentMove.color &&
-        getWinner(rooms[roomCode].gameState) === null
-      ) {
-        if (isValidMove(rooms[roomCode].gameState, currentMove)) {
-          // fix for js
+      // check if the original player is even still in the room
+      if (rooms[roomCode].players[socket.id]) {
+        if (
+          rooms[roomCode].players[socket.id].color == currentMove.color &&
+          getWinner(rooms[roomCode].gameState) === null
+        ) {
+          if (isValidMove(rooms[roomCode].gameState, currentMove)) {
+            // fix for js
 
-          rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift({
-            color: currentMove.color,
-            size: currentMove.size,
-          });
+            rooms[roomCode].gameState[currentMove.row][currentMove.col].unshift(
+              {
+                color: currentMove.color,
+                size: currentMove.size,
+              }
+            );
 
-          // add move to room history
-          rooms[roomCode].history.push(currentMove);
+            // add move to room history
+            rooms[roomCode].history.push(currentMove);
 
-          // emit new gameState to all clients in the room
-          io.to(roomCode).emit(
-            "gameState",
-            rooms[roomCode].gameState,
-            rooms[roomCode].history
-          );
+            // emit new gameState to all clients in the room
+            io.to(roomCode).emit(
+              "gameState",
+              rooms[roomCode].gameState,
+              rooms[roomCode].history
+            );
+          }
         }
       }
       // if it is not a valid move, then emit a invalid message to the chat
