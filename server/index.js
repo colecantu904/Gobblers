@@ -31,11 +31,7 @@ const io = new Server(server, {
             `http://${process.env.SERVER_IP || "localhost"}:80`,
           ]
         : [
-            "http://localhost:5173",
-            "https://localhost:8443",
-            "http://localhost",
-            "http://localhost:80",
-            "http://localhost:3000",
+            "*"
           ],
     methods: ["GET", "POST"],
     credentials: true,

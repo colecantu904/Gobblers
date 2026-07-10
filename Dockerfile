@@ -17,6 +17,9 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Add this line to ensure the app knows it is in production
+ENV NODE_ENV=production
+
 # Copy package files and install only production dependencies
 COPY package*.json ./
 RUN npm ci --only=production
